@@ -100,6 +100,11 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
   const lastGeocodeCoordsRef = useRef<Coordinates | null>(null);
   const lastGeocodeTimeRef = useRef<number>(0);
   const geocodeInFlightRef = useRef(false);
+  // Becomes true once we have EVER received a valid position fix. Used to
+  // suppress transient watcher errors (POSITION_UNAVAILABLE / TIMEOUT) that the
+  // browser routinely emits while a live watch is running — those should never
+  // flip the UI back to a "Location is off" state once we already have a fix.
+  const hadFixRef = useRef(false);
 
   // Throttled reverse geocoding: only hit the API when the user has moved a
   // meaningful distance or enough time has passed since the last lookup.
@@ -139,6 +144,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
 
   const handleSuccess = useCallback((position: GeolocationPosition) => {
     const { latitude: lat, longitude: lng, accuracy: acc } = position.coords;
+    hadFixRef.current = true;
     setLatitude(lat);
     setLongitude(lng);
     setAccuracy(acc ?? null);
@@ -151,14 +157,28 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
 
   const handleError = useCallback((err: GeolocationPositionError) => {
     setLoading(false);
+
+    // A genuine permission denial is always meaningful — surface it regardless
+    // of whether we previously had a fix.
+    if (err.code === err.PERMISSION_DENIED) {
+      setPermissionStatus('denied');
+      setGpsEnabled(false);
+      setError('Location permission denied');
+      return;
+    }
+
+    // For POSITION_UNAVAILABLE / TIMEOUT: if we have ALREADY obtained a valid
+    // fix, these are almost always transient hiccups from the live watcher
+    // (e.g. a momentary loss of signal). Ignore them so the UI does not falsely
+    // claim "Location is off" while location is actually on and working.
+    if (hadFixRef.current) {
+      return;
+    }
+
     switch (err.code) {
-      case err.PERMISSION_DENIED:
-        setPermissionStatus('denied');
-        setError('Location permission denied');
-        break;
       case err.POSITION_UNAVAILABLE:
-        // Permission is fine but the device cannot produce a fix — usually
-        // means location services / GPS are turned off.
+        // No fix yet AND device cannot produce one — usually means location
+        // services / GPS are turned off.
         setGpsEnabled(false);
         setError('Location services unavailable. Please enable GPS.');
         break;
