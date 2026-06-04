@@ -52,24 +52,49 @@ export const YourRoute: React.FC<YourRouteProps> = ({ onRouteComplete }) => {
     setSuggestions(getRecentAddresses());
   }, []);
 
-  // Reverse geocode current location to get proper address.
-  // Only auto-fill when real GPS coordinates are confirmed (not null) and we
-  // have not auto-filled before. Once the user clears the field we never refill.
+  // Auto-fill the pick-up box with the device's current address.
+  // Only runs when real GPS coordinates are confirmed (not null) and the user
+  // hasn't already filled/cleared the field. We ONLY mark it as auto-filled
+  // once we have actually placed a value, so a transient geocode failure can
+  // never permanently leave the box empty — it will retry on the next update.
   useEffect(() => {
-    const reverseGeocodeLocation = async () => {
-      if (geoLat !== null && geoLng !== null && !pickup && !hasAutoFilledPickup) {
+    if (geoLat === null || geoLng === null || pickup || hasAutoFilledPickup) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const fillPickup = async () => {
+      // 1. Prefer the address already resolved by the global LocationContext.
+      if (currentLocation) {
+        setPickup(currentLocation);
+        setPickupCoords({ lat: geoLat, lng: geoLng });
         setHasAutoFilledPickup(true);
-        const result = await reverseGeocode(geoLat, geoLng);
-        if (result) {
-          setPickup(result.address);
-          setPickupCoords(result.coords);
-        } else if (currentLocation) {
-          setPickup(currentLocation);
-          setPickupCoords({ lat: geoLat, lng: geoLng });
-        }
+        return;
       }
+
+      // 2. Otherwise resolve the coordinates directly via Geoapify.
+      const result = await reverseGeocode(geoLat, geoLng);
+      if (cancelled) return;
+
+      if (result) {
+        setPickup(result.address);
+        setPickupCoords(result.coords);
+        setHasAutoFilledPickup(true);
+        return;
+      }
+
+      // 3. Last-resort fallback: show raw coordinates so the box is never empty.
+      setPickup(`${geoLat.toFixed(5)}, ${geoLng.toFixed(5)}`);
+      setPickupCoords({ lat: geoLat, lng: geoLng });
+      setHasAutoFilledPickup(true);
     };
-    reverseGeocodeLocation();
+
+    void fillPickup();
+
+    return () => {
+      cancelled = true;
+    };
   }, [geoLat, geoLng, currentLocation, pickup, hasAutoFilledPickup]);
 
   useEffect(() => {

@@ -136,18 +136,48 @@ export function FoodiesRoute() {
     }, 300);
   }, [searchForAddresses]);
 
-  // Only auto-fill the delivery location from GPS when real coordinates are
-  // confirmed (not null). Once auto-filled (or once the user clears it) we never
-  // refill, so the user can rub it off and type their own address.
+  // Auto-fill the delivery location with the device's current address.
+  // Runs as soon as real GPS coordinates are confirmed — it does NOT wait for
+  // the shared context address, and falls back to a direct geocode (and then
+  // raw coordinates) so a transient failure can never leave the box empty.
+  // We only mark it auto-filled once a value has actually been placed.
   useEffect(() => {
-    if (geoLat !== null && geoLng !== null && currentLocation && !deliveryLocation && !hasAutoFilled) {
-      setDeliveryLocation(currentLocation);
-      setCurrentLocationQuery(currentLocation);
+    if (deliveryLocation) {
+      if (!currentLocationQuery) setCurrentLocationQuery(deliveryLocation);
+      return;
+    }
+    if (geoLat === null || geoLng === null || hasAutoFilled) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const fillDelivery = async () => {
+      // 1. Prefer the address already resolved by the global LocationContext.
+      if (currentLocation) {
+        setDeliveryLocation(currentLocation);
+        setCurrentLocationQuery(currentLocation);
+        setDeliveryCoords({ lat: geoLat, lng: geoLng });
+        setHasAutoFilled(true);
+        return;
+      }
+
+      // 2. Otherwise resolve the coordinates directly via Geoapify.
+      const result = await reverseGeocode(geoLat, geoLng);
+      if (cancelled) return;
+
+      const resolved = result?.address ?? `${geoLat.toFixed(5)}, ${geoLng.toFixed(5)}`;
+      setDeliveryLocation(resolved);
+      setCurrentLocationQuery(resolved);
       setDeliveryCoords({ lat: geoLat, lng: geoLng });
       setHasAutoFilled(true);
-    } else if (deliveryLocation && !currentLocationQuery) {
-      setCurrentLocationQuery(deliveryLocation);
-    }
+    };
+
+    void fillDelivery();
+
+    return () => {
+      cancelled = true;
+    };
   }, [geoLat, geoLng, currentLocation, deliveryLocation, hasAutoFilled, currentLocationQuery]);
 
 
