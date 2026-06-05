@@ -86,32 +86,23 @@ export const WaitingForDriver: React.FC<WaitingForDriverProps> = ({
     return arrival.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   };
 
-  // Build map markers for pickup and destination
+  // Build map markers. Pickup/dropoff are shown by the polyline's ETA bubble
+  // (start) and Arrive-by card (end), so only intermediate stops get a marker.
   const mapMarkers = useMemo((): MapMarker[] => {
     const markers: MapMarker[] = [];
-    const pickupCoords = orderData.pickupCoords;
-    const destinationCoords = orderData.destinationCoords;
-    
-    if (pickupCoords?.lat && pickupCoords?.lng) {
-      markers.push({
-        id: 'pickup',
-        type: 'pickup',
-        lat: pickupCoords.lat,
-        lng: pickupCoords.lng
-      });
-    }
-    
-    if (destinationCoords?.lat && destinationCoords?.lng) {
-      markers.push({
-        id: 'dropoff',
-        type: 'dropoff',
-        lat: destinationCoords.lat,
-        lng: destinationCoords.lng
-      });
-    }
-    
+    (orderData.stopCoords || []).forEach((stop: { lat?: number; lng?: number }, index: number) => {
+      if (stop?.lat && stop?.lng) {
+        markers.push({
+          id: `stop-${index}`,
+          type: 'stop',
+          lat: stop.lat,
+          lng: stop.lng,
+          label: `${index + 1}`
+        });
+      }
+    });
     return markers;
-  }, [orderData.pickupCoords, orderData.destinationCoords]);
+  }, [orderData.stopCoords]);
 
   // Progress timer for scanning animation
   useEffect(() => {

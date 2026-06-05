@@ -2,20 +2,19 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import basicSsl from '@vitejs/plugin-basic-ssl';
 
-// Enable HTTPS only when explicitly requested (e.g. `HTTPS=true npm run dev`).
-// This is needed for mobile dev testing over a local IP, because browsers block
-// the Geolocation API outside a secure context. It stays OFF by default so the
-// hosted preview (which proxies over HTTP) keeps working.
-const useHttps = process.env.HTTPS === 'true';
-
+// HTTPS is always enabled in dev. Browsers block the Geolocation API outside a
+// secure context, so a phone testing over the local network (http://<ip>:5173)
+// would never be able to read GPS. `host: true` exposes the dev server on the
+// local network so a phone on the same Wi-Fi can reach it.
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), ...(useHttps ? [basicSsl()] : [])],
+  plugins: [react(), basicSsl()],
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
   server: {
-    https: useHttps,
+    https: true,
+    host: true,
     allowedHosts: ['.vercel.run'],
   },
 });

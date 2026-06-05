@@ -237,48 +237,63 @@ const createMarkerElement = (type: MapMarker['type'], label?: string): HTMLEleme
   return el;
 };
 
-// Create ETA bubble element
+// Create ETA bubble element — sits as a flag at the START of the polyline.
 const createEtaBubble = (eta: number): HTMLElement => {
   const el = document.createElement('div');
+  el.style.cssText = 'position:relative;';
   el.innerHTML = `
     <div style="
       background: #5B2EFF;
       color: white;
-      padding: 8px 16px;
+      padding: 6px 14px;
       border-radius: 20px;
       font-size: 14px;
-      font-weight: 600;
-      box-shadow: 0 4px 12px rgba(91, 46, 255, 0.3);
+      font-weight: 700;
+      box-shadow: 0 4px 12px rgba(91, 46, 255, 0.35);
       white-space: nowrap;
-      transform: translateY(-60px);
-      animation: etaPulse 2s ease-in-out infinite;
+      position: relative;
     ">
       ${eta} min
+      <div style="
+        position: absolute;
+        bottom: -6px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0; height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 6px solid #5B2EFF;
+      "></div>
     </div>
-    <style>
-      @keyframes etaPulse {
-        0%, 100% { transform: translateY(-60px) scale(1); }
-        50% { transform: translateY(-60px) scale(1.05); }
-      }
-    </style>
   `;
   return el;
 };
 
-// Create arrival card element
+// Create arrival card element — sits as a flag at the END of the polyline.
 const createArrivalCard = (arrivalTime: string): HTMLElement => {
   const el = document.createElement('div');
   el.innerHTML = `
     <div style="
       background: white;
-      padding: 12px 20px;
+      padding: 10px 16px;
       border-radius: 12px;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-      transform: translateY(-70px);
       border-left: 4px solid #5B2EFF;
+      position: relative;
+      white-space: nowrap;
     ">
-      <div style="font-size: 12px; color: #6B7280; margin-bottom: 2px;">Arrive by</div>
-      <div style="font-size: 18px; font-weight: 700; color: #1F2937;">${arrivalTime}</div>
+      <div style="font-size: 11px; color: #6B7280; margin-bottom: 1px;">Arrive by</div>
+      <div style="font-size: 17px; font-weight: 700; color: #1F2937;">${arrivalTime}</div>
+      <div style="
+        position: absolute;
+        bottom: -6px;
+        left: 24px;
+        width: 0; height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 6px solid white;
+        filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1));
+      "></div>
     </div>
   `;
   return el;
@@ -480,17 +495,21 @@ export const MapLibreMap: React.FC<MapLibreMapProps> = ({
       etaBubbleRef.current = null;
     }
 
-    if (pickupEta === undefined) return;
+    if (pickupEta === undefined || !encodedPolyline) return;
 
-    // Find pickup marker position
-    const pickupMarker = markers.find(m => m.type === 'pickup');
-    if (pickupMarker) {
+    // Place the bubble at the FIRST point of the polyline (pickup end).
+    try {
+      const decoded = polyline.decode(encodedPolyline);
+      if (decoded.length === 0) return;
+      const [lat, lng] = decoded[0];
       const el = createEtaBubble(pickupEta);
       etaBubbleRef.current = new maplibregl.Marker({ element: el, anchor: 'bottom' })
-        .setLngLat([pickupMarker.lng, pickupMarker.lat])
+        .setLngLat([lng, lat])
         .addTo(map.current);
+    } catch (e) {
+      console.error('ETA bubble placement error', e);
     }
-  }, [pickupEta, markers, isMapLoaded]);
+  }, [pickupEta, encodedPolyline, isMapLoaded]);
 
   // Update arrival card
   useEffect(() => {
@@ -502,17 +521,21 @@ export const MapLibreMap: React.FC<MapLibreMapProps> = ({
       arrivalCardRef.current = null;
     }
 
-    if (!arrivalTime) return;
+    if (!arrivalTime || !encodedPolyline) return;
 
-    // Find dropoff marker position
-    const dropoffMarker = markers.find(m => m.type === 'dropoff');
-    if (dropoffMarker) {
+    // Place the card at the LAST point of the polyline (destination end).
+    try {
+      const decoded = polyline.decode(encodedPolyline);
+      if (decoded.length === 0) return;
+      const [lat, lng] = decoded[decoded.length - 1];
       const el = createArrivalCard(arrivalTime);
       arrivalCardRef.current = new maplibregl.Marker({ element: el, anchor: 'bottom' })
-        .setLngLat([dropoffMarker.lng, dropoffMarker.lat])
+        .setLngLat([lng, lat])
         .addTo(map.current);
+    } catch (e) {
+      console.error('Arrival card placement error', e);
     }
-  }, [arrivalTime, markers, isMapLoaded]);
+  }, [arrivalTime, encodedPolyline, isMapLoaded]);
 
   // Add store marker
   useEffect(() => {

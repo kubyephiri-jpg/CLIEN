@@ -327,6 +327,17 @@ export function FoodDelivery() {
     const storeName = routeData.storeName || cart[0]?.storeName || '';
     const storeAddress = routeData.storeAddress || cart[0]?.storeAddress || '';
     const storeLocation = routeData.storeLocation || { lat: null, lng: null };
+    const deliveryCoords = routeData?.deliveryCoords;
+
+    // For delivery flows the "pickup" is the store and the "destination" is the
+    // customer's delivery address. Pass the route polyline + both endpoints so
+    // ConfirmOrder (and later WaitingForDriver) can draw the route map.
+    const pickupCoords = storeLocation?.lat && storeLocation?.lng
+      ? { lat: storeLocation.lat, lng: storeLocation.lng }
+      : undefined;
+    const destinationCoords = deliveryCoords?.lat && deliveryCoords?.lng
+      ? { lat: deliveryCoords.lat, lng: deliveryCoords.lng }
+      : undefined;
 
     navigate('/confirm-order', {
       state: {
@@ -334,7 +345,15 @@ export function FoodDelivery() {
         type: category,
         // Pass serviceType explicitly so ConfirmOrder doesn't have to infer it
         serviceType: serviceType,
+        // Route data for the map (ConfirmOrder reads these top-level fields)
+        encodedPolyline: routePolyline ?? undefined,
+        pickupCoords,
+        destinationCoords,
         orderData: {
+          // Mirror the route data inside orderData so WaitingForDriver can read it
+          encodedPolyline: routePolyline ?? undefined,
+          pickupCoords,
+          destinationCoords,
           deliveryMode: {
             id: selectedOption.category,
             label: selectedOption.title,
@@ -391,7 +410,9 @@ export function FoodDelivery() {
 
   const hasOptions = deliveryOptions.length > 0;
 
-  // Build map markers for store and destination
+  // Build map markers. The store keeps its own pin (it is not a pickup/dropoff
+  // pin). The destination is represented by the polyline's Arrive-by card, so we
+  // do NOT add a dropoff marker.
   const mapMarkers = useMemo((): MapMarker[] => {
     const markers: MapMarker[] = [];
     const storeLocation = routeData?.storeLocation;
@@ -402,17 +423,6 @@ export function FoodDelivery() {
         type: 'store',
         lat: storeLocation.lat,
         lng: storeLocation.lng
-      });
-    }
-    
-    // Use the real delivery coordinates when available (no offset hack)
-    const deliveryCoords = routeData?.deliveryCoords;
-    if (deliveryCoords?.lat && deliveryCoords?.lng) {
-      markers.push({
-        id: 'dropoff',
-        type: 'dropoff',
-        lat: deliveryCoords.lat,
-        lng: deliveryCoords.lng
       });
     }
     

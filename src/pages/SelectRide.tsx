@@ -383,30 +383,25 @@ export const SelectRide: React.FC<SelectRideProps> = ({
 
   const hasOptions = rideOptions.length > 0;
 
-  // Build map markers for pickup, destination, and stops
+  // Build map markers. Pickup/dropoff are NOT added as markers — the polyline's
+  // own ETA bubble (start) and Arrive-by card (end) represent those endpoints.
+  // Only intermediate stops get a marker, for multi-stop rides.
   const mapMarkers = useMemo((): MapMarker[] => {
     const markers: MapMarker[] = [];
-    
-    if (pickupCoords?.lat && pickupCoords?.lng) {
-      markers.push({
-        id: 'pickup',
-        type: 'pickup',
-        lat: pickupCoords.lat,
-        lng: pickupCoords.lng
-      });
-    }
-    
-    if (destinationCoords?.lat && destinationCoords?.lng) {
-      markers.push({
-        id: 'dropoff',
-        type: 'dropoff',
-        lat: destinationCoords.lat,
-        lng: destinationCoords.lng
-      });
-    }
-    
+    const stopCoords = location.state?.stopCoords || [];
+    stopCoords.forEach((stop: { lat?: number; lng?: number }, index: number) => {
+      if (stop?.lat && stop?.lng) {
+        markers.push({
+          id: `stop-${index}`,
+          type: 'stop',
+          lat: stop.lat,
+          lng: stop.lng,
+          label: `${index + 1}`
+        });
+      }
+    });
     return markers;
-  }, [pickupCoords, destinationCoords]);
+  }, [location.state?.stopCoords]);
 
   // Calculate arrival time based on ETA
   const getArrivalTime = useCallback(() => {

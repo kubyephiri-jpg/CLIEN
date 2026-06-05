@@ -206,7 +206,9 @@ export const YourRoute: React.FC<YourRouteProps> = ({ onRouteComplete }) => {
   const handleFieldFocus = (field: 'pickup' | 'destination' | number) => {
     setActiveField(field);
     if (field === 'pickup') {
-      setSearchQuery(pickup);
+      // Don't seed the search with the GPS-filled pickup value — that would
+      // fire a pointless search and briefly flash "Searching...".
+      setSearchQuery('');
     } else if (field === 'destination') {
       setSearchQuery(destination);
     } else {

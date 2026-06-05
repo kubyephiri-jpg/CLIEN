@@ -428,30 +428,23 @@ export const ConfirmOrder: React.FC<ConfirmOrderProps> = ({
     }
   };
 
-  // Build map markers
+  // Build map markers. Pickup/dropoff are shown by the polyline's ETA bubble
+  // (start) and Arrive-by card (end), so only intermediate stops get a marker.
   const mapMarkers = useMemo((): MapMarker[] => {
     const markers: MapMarker[] = [];
-    
-    if (pickupCoords?.lat && pickupCoords?.lng) {
-      markers.push({
-        id: 'pickup',
-        type: 'pickup',
-        lat: pickupCoords.lat,
-        lng: pickupCoords.lng
-      });
-    }
-    
-    if (destinationCoords?.lat && destinationCoords?.lng) {
-      markers.push({
-        id: 'dropoff',
-        type: 'dropoff',
-        lat: destinationCoords.lat,
-        lng: destinationCoords.lng
-      });
-    }
-    
+    (stopCoords || []).forEach((stop: { lat?: number; lng?: number }, index: number) => {
+      if (stop?.lat && stop?.lng) {
+        markers.push({
+          id: `stop-${index}`,
+          type: 'stop',
+          lat: stop.lat,
+          lng: stop.lng,
+          label: `${index + 1}`
+        });
+      }
+    });
     return markers;
-  }, [pickupCoords, destinationCoords]);
+  }, [stopCoords]);
 
   // Calculate arrival time
   const getArrivalTime = useCallback(() => {
